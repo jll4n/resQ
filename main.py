@@ -1,8 +1,10 @@
 # !/usr/bin/env python3
 from pyniryo import *
 import time
+from db import executer_tache, log_mouvement
 
-robot = NiryoRobot("169.254.200.200")
+ip_robot = "169.254.200.200"
+robot = NiryoRobot(ip_robot)
 robot.calibrate_auto()
 workspace_name = "Workspace python"
 robot.update_tool()
@@ -28,6 +30,7 @@ def pickcarre():
     robot.move_pose(base_pose)
     robot.move_pose(lowbase_pose)
     robot.push_air_vacuum_pump()
+    executer_tache("Pick carre")
 
 
 def pickrond():
@@ -37,6 +40,7 @@ def pickrond():
     robot.move_pose(lowbase_pose)
     robot.push_air_vacuum_pump()
     robot.move_pose(base_pose)
+    executer_tache("Pick rond")
 
 
 def checkcolor():
@@ -49,6 +53,7 @@ def checkcolor():
     elif color_ret == ObjectColor.BLUE:
         robot.move_pose(baseeject_pose)
         robot.move_pose(eject_pose)
+    executer_tache("Check color")
 
 
 robot.move_pose(base_pose)
