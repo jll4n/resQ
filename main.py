@@ -1,9 +1,26 @@
 # !/usr/bin/env python3
 from pyniryo import *
 import time
-from db import executer_tache, log_mouvement
+import mysql.connector
+import datetime
 
-ip_robot = "169.254.200.200"
+DB_CONFIG = {
+    "host":     "127.0.0.1",
+    "user":     "root",
+    "password": "root123",
+    "database": "niryo_data"
+}
+
+db     = mysql.connector.connect(**DB_CONFIG)
+cursor = db.cursor()
+
+ethernet = False
+
+if ethernet:
+    ip_robot = "169.254.200.200"
+else:
+    ip_robot = "10.10.10.10"
+
 robot = NiryoRobot(ip_robot)
 robot.calibrate_auto()
 workspace_name = "Workspace python"
@@ -23,6 +40,36 @@ count_dict = {
     ObjectColor.GREEN: 0,
 }
 
+def log_mouvement(label, statut="ok", erreur=None):
+    joints = robot.get_joints()
+    pose   = robot.get_pose()
+    cursor.execute("""
+        INSERT INTO robot_logs
+            (timestamp, label, statut, j1, j2, j3, j4, j5, j6, x, y, z, erreur)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        datetime.datetime.now(), label, statut,
+        *joints,
+        pose.x, pose.y, pose.z,
+        erreur
+    ))
+    db.commit()
+
+def executer_tache(nom_tache):
+    cursor.execute("""
+        SELECT j1,j2,j3,j4,j5,j6 FROM tasks
+        WHERE name=%s ORDER BY step_order
+    """, (nom_tache,))
+    steps = cursor.fetchall()
+
+    for i, joints in enumerate(steps):
+        try:
+            robot.move_joints(*joints)
+            log_mouvement(label=f"{nom_tache}_step{i}", statut="ok")
+        except Exception as e:
+            log_mouvement(label=f"{nom_tache}_step{i}", statut="erreur", erreur=str(e))
+            raise
+
 
 def pickcarre():
     robot.move_pose(carre_pose)
@@ -30,7 +77,7 @@ def pickcarre():
     robot.move_pose(base_pose)
     robot.move_pose(lowbase_pose)
     robot.push_air_vacuum_pump()
-    executer_tache("Pick carre")
+    db.executer_tache("Pick carre")
 
 
 def pickrond():
@@ -40,7 +87,7 @@ def pickrond():
     robot.move_pose(lowbase_pose)
     robot.push_air_vacuum_pump()
     robot.move_pose(base_pose)
-    executer_tache("Pick rond")
+    db.executer_tache("Pick rond")
 
 
 def checkcolor():
@@ -53,7 +100,7 @@ def checkcolor():
     elif color_ret == ObjectColor.BLUE:
         robot.move_pose(baseeject_pose)
         robot.move_pose(eject_pose)
-    executer_tache("Check color")
+    db.executer_tache("Check color")
 
 
 robot.move_pose(base_pose)

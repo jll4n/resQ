@@ -1,6 +1,5 @@
-from main import ip_robot
 import mysql.connector
-from pyniryo import NiryoRobot
+#from pyniryo import NiryoRobot
 import datetime
 
 DB_CONFIG = {
@@ -12,6 +11,13 @@ DB_CONFIG = {
 
 db     = mysql.connector.connect(**DB_CONFIG)
 cursor = db.cursor()
+
+ethernet = False
+
+if ethernet:
+    ip_robot = "169.254.200.200"
+else:
+    ip_robot = "10.10.10.10"
 
 robot = NiryoRobot(ip_robot)
 
