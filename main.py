@@ -77,7 +77,7 @@ def pickcarre():
     robot.move_pose(base_pose)
     robot.move_pose(lowbase_pose)
     robot.push_air_vacuum_pump()
-    db.executer_tache("Pick carre")
+    executer_tache("Pick carre")
 
 
 def pickrond():
@@ -87,7 +87,7 @@ def pickrond():
     robot.move_pose(lowbase_pose)
     robot.push_air_vacuum_pump()
     robot.move_pose(base_pose)
-    db.executer_tache("Pick rond")
+    executer_tache("Pick rond")
 
 
 def checkcolor():
@@ -100,7 +100,7 @@ def checkcolor():
     elif color_ret == ObjectColor.BLUE:
         robot.move_pose(baseeject_pose)
         robot.move_pose(eject_pose)
-    db.executer_tache("Check color")
+    executer_tache("Check color")
 
 
 robot.move_pose(base_pose)
