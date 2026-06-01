@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Niryo NED2 — Supervision</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="header-left">
+      <span class="logo-bracket">[</span>
+      <span class="logo-text">NIRYO NED2</span>
+      <span class="logo-bracket">]</span>
+      <span class="logo-sub">SUPERVISION INTERFACE</span>
+    </div>
+    <div class="header-right">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusLabel">DÉCONNECTÉ</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ════════════════ COLONNE GAUCHE ════════════════ -->
+    <aside class="sidebar">
+
+      <!-- Panneau de contrôle -->
+      <section class="card" id="controlPanel">
+        <h2 class="card-title">PANNEAU DE CONTRÔLE</h2>
+
+        <div class="mode-selector">
+          <label class="mode-label">MODE RÉSEAU</label>
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="btnWifi" onclick="setMode('wifi')">WIFI</button>
+            <button class="toggle-btn" id="btnEthernet" onclick="setMode('ethernet')">ETHERNET</button>
+          </div>
+          <div class="mode-ip" id="modeIp">IP : 10.10.10.10</div>
+        </div>
+
+        <div class="ctrl-buttons">
+          <button class="btn-launch" id="btnLaunch" onclick="lancerCycle()">
+            <span class="btn-icon">▶</span>
+            LANCER LE CYCLE
+          </button>
+          <button class="btn-stop" id="btnStop" onclick="stopUrgence()">
+            <span class="btn-icon">■</span>
+            STOP D'URGENCE
+          </button>
+        </div>
+
+        <div class="last-action-box">
+          <span class="la-label">DERNIÈRE ACTION</span>
+          <span class="la-value" id="lastAction">—</span>
+        </div>
+      </section>
+
+      <!-- Compteurs couleurs -->
+      <section class="card" id="colorCount">
+        <h2 class="card-title">OBJETS TRIÉS</h2>
+        <div class="color-counters">
+          <div class="color-card blue">
+            <div class="color-dot"></div>
+            <div class="color-name">BLEU</div>
+            <div class="color-num" id="countBlue">0</div>
+          </div>
+          <div class="color-card red">
+            <div class="color-dot"></div>
+            <div class="color-name">ROUGE</div>
+            <div class="color-num" id="countRed">0</div>
+          </div>
+          <div class="color-card green">
+            <div class="color-dot"></div>
+            <div class="color-name">VERT</div>
+            <div class="color-num" id="countGreen">0</div>
+          </div>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- ════════════════ COLONNE DROITE ════════════════ -->
+    <div class="content">
+
+      <!-- Tableau de bord temps réel -->
+      <section class="card" id="dashboard">
+        <h2 class="card-title">TABLEAU DE BORD — TEMPS RÉEL</h2>
+
+        <div class="dashboard-grid">
+          <!-- Joints -->
+          <div class="joints-panel">
+            <h3 class="sub-title">POSITION DES JOINTS</h3>
+            <div class="joints-grid">
+              <div class="joint-item" id="j1box">
+                <div class="joint-label">J1</div>
+                <div class="joint-bar-wrap"><div class="joint-bar" id="j1bar"></div></div>
+                <div class="joint-val" id="j1val">0.000</div>
+              </div>
+              <div class="joint-item" id="j2box">
+                <div class="joint-label">J2</div>
+                <div class="joint-bar-wrap"><div class="joint-bar" id="j2bar"></div></div>
+                <div class="joint-val" id="j2val">0.000</div>
+              </div>
+              <div class="joint-item" id="j3box">
+                <div class="joint-label">J3</div>
+                <div class="joint-bar-wrap"><div class="joint-bar" id="j3bar"></div></div>
+                <div class="joint-val" id="j3val">0.000</div>
+              </div>
+              <div class="joint-item" id="j4box">
+                <div class="joint-label">J4</div>
+                <div class="joint-bar-wrap"><div class="joint-bar" id="j4bar"></div></div>
+                <div class="joint-val" id="j4val">0.000</div>
+              </div>
+              <div class="joint-item" id="j5box">
+                <div class="joint-label">J5</div>
+                <div class="joint-bar-wrap"><div class="joint-bar" id="j5bar"></div></div>
+                <div class="joint-val" id="j5val">0.000</div>
+              </div>
+              <div class="joint-item" id="j6box">
+                <div class="joint-label">J6</div>
+                <div class="joint-bar-wrap"><div class="joint-bar" id="j6bar"></div></div>
+                <div class="joint-val" id="j6val">0.000</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Statuts -->
+          <div class="status-panel">
+            <h3 class="sub-title">STATUTS SYSTÈME</h3>
+            <div class="status-list">
+              <div class="status-row">
+                <span class="sr-label">ROBOT</span>
+                <span class="sr-badge" id="badgeRobot">DÉCONNECTÉ</span>
+              </div>
+              <div class="status-row">
+                <span class="sr-label">CYCLE</span>
+                <span class="sr-badge" id="badgeCycle">EN ATTENTE</span>
+              </div>
+              <div class="status-row">
+                <span class="sr-label">CONVOYEUR</span>
+                <span class="sr-badge" id="badgeConveyor">ARRÊTÉ</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Historique des logs -->
+      <section class="card" id="logsPanel">
+        <div class="logs-header">
+          <h2 class="card-title">HISTORIQUE DES LOGS</h2>
+          <div class="logs-filter">
+            <button class="filter-btn active" onclick="setFilter(null, this)">TOUS</button>
+            <button class="filter-btn ok"     onclick="setFilter('ok', this)">OK</button>
+            <button class="filter-btn err"    onclick="setFilter('erreur', this)">ERREUR</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="logsTable">
+            <thead>
+              <tr>
+                <th>HORODATAGE</th>
+                <th>LABEL</th>
+                <th>STATUT</th>
+                <th>J1</th><th>J2</th><th>J3</th>
+                <th>J4</th><th>J5</th><th>J6</th>
+                <th>X</th><th>Y</th><th>Z</th>
+                <th>ERREUR</th>
+              </tr>
+            </thead>
+            <tbody id="logsTbody">
+              <tr><td colspan="13" class="empty-row">Aucune donnée</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    // ── Horloge ──────────────────────────────────────────────────────────────
+    function updateClock() {
+      const now = new Date();
+      document.getElementById("clock").textContent =
+        now.toLocaleTimeString("fr-FR");
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ── Mode réseau ──────────────────────────────────────────────────────────
+    let currentMode = "wifi";
+    const ipMap = { wifi: "IP : 10.10.10.10", ethernet: "IP : 169.254.200.200" };
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById("btnWifi").classList.toggle("active", mode === "wifi");
+      document.getElementById("btnEthernet").classList.toggle("active", mode === "ethernet");
+      document.getElementById("modeIp").textContent = ipMap[mode];
+      fetch("/api/mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode })
+      });
+    }
+
+    // ── Lancer / Stop ────────────────────────────────────────────────────────
+    function lancerCycle() {
+      fetch("/api/lancer", { method: "POST" })
+        .then(r => r.json())
+        .then(d => console.log(d));
+    }
+
+    function stopUrgence() {
+      document.getElementById("btnStop").classList.add("pulse-stop");
+      setTimeout(() => document.getElementById("btnStop").classList.remove("pulse-stop"), 600);
+      fetch("/api/stop", { method: "POST" });
+    }
+
+    // ── Mise à jour état temps réel ──────────────────────────────────────────
+    function updateState() {
+      fetch("/api/state")
+        .then(r => r.json())
+        .then(s => {
+          // Status dot
+          const dot = document.getElementById("statusDot");
+          const lbl = document.getElementById("statusLabel");
+          if (s.running) {
+            dot.className = "status-dot running";
+            lbl.textContent = "EN COURS";
+          } else if (s.connected) {
+            dot.className = "status-dot connected";
+            lbl.textContent = "CONNECTÉ";
+          } else {
+            dot.className = "status-dot";
+            lbl.textContent = "DÉCONNECTÉ";
+          }
+
+          // Badges
+          setBadge("badgeRobot",   s.connected ? "CONNECTÉ" : "DÉCONNECTÉ",
+                                   s.connected ? "ok" : "off");
+          setBadge("badgeCycle",   s.running   ? "EN COURS" : "EN ATTENTE",
+                                   s.running   ? "ok" : "off");
+          setBadge("badgeConveyor",s.conveyor_active ? "ACTIF" : "ARRÊTÉ",
+                                   s.conveyor_active ? "ok" : "off");
+
+          // Dernière action
+          document.getElementById("lastAction").textContent = s.last_action || "—";
+
+          // Joints
+          const j = s.joints;
+          const MAX_RAD = Math.PI;
+          ["j1","j2","j3","j4","j5","j6"].forEach(key => {
+            const val  = j[key] || 0;
+            const pct  = ((val + MAX_RAD) / (2 * MAX_RAD)) * 100;
+            document.getElementById(key + "val").textContent = val.toFixed(3);
+            document.getElementById(key + "bar").style.width = Math.min(100, Math.max(0, pct)) + "%";
+          });
+
+          // Compteurs
+          document.getElementById("countBlue").textContent  = s.count.BLUE  || 0;
+          document.getElementById("countRed").textContent   = s.count.RED   || 0;
+          document.getElementById("countGreen").textContent = s.count.GREEN || 0;
+
+          // Bouton lancer
+          document.getElementById("btnLaunch").disabled = s.running;
+        })
+        .catch(() => {});
+    }
+
+    function setBadge(id, text, cls) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = "sr-badge " + cls;
+    }
+
+    // ── Logs ─────────────────────────────────────────────────────────────────
+    let currentFilter = null;
+
+    function setFilter(statut, btn) {
+      currentFilter = statut;
+      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      loadLogs();
+    }
+
+    function loadLogs() {
+      const url = currentFilter
+        ? `/api/logs?statut=${currentFilter}`
+        : "/api/logs";
+      fetch(url)
+        .then(r => r.json())
+        .then(logs => {
+          const tbody = document.getElementById("logsTbody");
+          if (!logs.length) {
+            tbody.innerHTML = '<tr><td colspan="13" class="empty-row">Aucune donnée</td></tr>';
+            return;
+          }
+          tbody.innerHTML = logs.map(l => `
+            <tr class="log-row ${l.statut === 'erreur' ? 'row-err' : ''}">
+              <td class="mono">${l.timestamp || "—"}</td>
+              <td>${l.label || "—"}</td>
+              <td><span class="badge-statut ${l.statut}">${(l.statut||"").toUpperCase()}</span></td>
+              <td class="mono">${fmt(l.j1)}</td><td class="mono">${fmt(l.j2)}</td><td class="mono">${fmt(l.j3)}</td>
+              <td class="mono">${fmt(l.j4)}</td><td class="mono">${fmt(l.j5)}</td><td class="mono">${fmt(l.j6)}</td>
+              <td class="mono">${fmt(l.x)}</td><td class="mono">${fmt(l.y)}</td><td class="mono">${fmt(l.z)}</td>
+              <td class="err-msg">${l.erreur || ""}</td>
+            </tr>`).join("");
+        })
+        .catch(() => {});
+    }
+
+    function fmt(v) {
+      return v !== null && v !== undefined ? parseFloat(v).toFixed(3) : "—";
+    }
+
+    // ── Polling ──────────────────────────────────────────────────────────────
+    setInterval(updateState, 1000);
+    setInterval(loadLogs,    3000);
+    updateState();
+    loadLogs();
+  </script>
+</body>
+</html>
