@@ -355,18 +355,7 @@
           // Bouton lancer
           document.getElementById("btnLaunch").disabled = s.running;
 
-          // Caméra — on démarre le flux à la connexion, on le coupe à la déconnexion
-          const camFeed = document.getElementById("cameraFeed");
-          const camOff  = document.getElementById("cameraOff");
-          if (s.connected && camFeed.style.display !== "block") {
-            camFeed.src = "/api/camera?" + Date.now();
-            camFeed.style.display = "block";
-            camOff.style.display  = "none";
-          } else if (!s.connected && camFeed.style.display === "block") {
-            camFeed.src = "";
-            camFeed.style.display = "none";
-            camOff.style.display  = "flex";
-          }
+          // Caméra désactivée temporairement
         })
         .catch(() => {});
     }

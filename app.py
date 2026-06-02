@@ -120,9 +120,9 @@ def api_lancer():
         global robot_obj
         import os
         if os.environ.get("USE_MOCK"):
-            from mock_niryo import NiryoRobot, JointsPosition, ObjectColor, ObjectShape
+            from mock_niryo import NiryoRobot, ObjectColor, ObjectShape
         else:
-            from pyniryo import NiryoRobot, JointsPosition, ObjectColor, ObjectShape
+            from pyniryo import NiryoRobot, ObjectColor, ObjectShape
 
         ip = "169.254.200.200" if robot_state["mode"] == "ethernet" else "10.10.10.10"
 
@@ -135,20 +135,37 @@ def api_lancer():
 
         try:
             robot_obj = NiryoRobot(ip)
+            # Calibration peut durer 60 s+ — on étend le timeout socket
+            try:
+                robot_obj._TcpClient__client_socket.settimeout(120)
+            except AttributeError:
+                pass
             robot_obj.calibrate_auto()
+            robot_obj.set_learning_mode(False)
             robot_state["connected"] = True
 
             workspace_name = "Workspace python"
-            robot_obj.update_tool()
-            conveyor_id = robot_obj.set_conveyor()
+
+            try:
+                robot_obj.update_tool()
+                print("[ROBOT] update_tool OK")
+            except Exception as e:
+                print(f"[ROBOT] update_tool ignoré : {e}")
+
+            conveyor_id = None
+            try:
+                conveyor_id = robot_obj.set_conveyor()
+                print(f"[ROBOT] set_conveyor OK → {conveyor_id}")
+            except Exception as e:
+                print(f"[ROBOT] set_conveyor ignoré : {e}")
 
             # Poses
-            base_pose     = JointsPosition( 0.19,  -0.012,  0.281, -1.491,  1.384, -2.77)
-            carre_pose    = JointsPosition( 0.157,  0.19,   0.113,  2.941,  0.957, -3.122)
-            lowbase_pose  = JointsPosition( 0.244,  0.005,  0.131, -2.61,   1.451, -2.893)
-            rond_pose     = JointsPosition( 0.138, -0.184,  0.135, -1.901,  1.083,  2.961)
-            eject_pose    = JointsPosition( 0.296,  0.004,  0.114, -2.7,    1.456,  3.111)
-            baseeject_pose= JointsPosition( 0.19,  -0.002,  0.115, -2.72,   1.3011,-3.094)
+            base_pose     = [ 0.19,  -0.012,  0.281, -1.491,  1.384, -2.77]
+            carre_pose    = [ 0.157,  0.19,   0.113,  2.941,  0.957, -3.122]
+            lowbase_pose  = [ 0.244,  0.005,  0.131, -2.61,   1.451, -2.893]
+            rond_pose     = [ 0.138, -0.184,  0.135, -1.901,  1.083,  2.961]
+            eject_pose    = [ 0.296,  0.004,  0.114, -2.7,    1.456,  3.111]
+            baseeject_pose= [ 0.19,  -0.002,  0.115, -2.72,   1.3011,-3.094]
 
             def update_joints():
                 j = robot_obj.get_joints()
@@ -181,48 +198,57 @@ def api_lancer():
                     break
 
                 robot_state["last_action"] = "Mouvement base"
-                robot_obj.move_joints(base_pose)
+                print(f"[ROBOT] move_joints base_pose {base_pose}")
+                robot_obj.move_joints(*base_pose)
+                print("[ROBOT] move_joints base_pose OK")
                 update_joints()
                 time.sleep(1)
 
                 if robot_state["stop_requested"]: break
 
                 robot_state["last_action"] = "Pick rond"
-                robot_obj.move_joints(rond_pose)
+                robot_obj.move_joints(*rond_pose)
                 robot_obj.pull_air_vacuum_pump()
-                robot_obj.move_joints(base_pose)
-                robot_obj.move_joints(lowbase_pose)
+                robot_obj.move_joints(*base_pose)
+                robot_obj.move_joints(*lowbase_pose)
                 robot_obj.push_air_vacuum_pump()
-                robot_obj.move_joints(base_pose)
+                robot_obj.move_joints(*base_pose)
                 update_joints()
                 log_bdd("Pick rond")
 
                 if robot_state["stop_requested"]: break
 
                 robot_state["last_action"] = "Détection couleur"
-                robot_obj.move_joints(base_pose)
-                obj_found, shape_ret, color_ret = robot_obj.vision_pick(workspace_name)
+                robot_obj.move_joints(*base_pose)
+                try:
+                    obj_found, shape_ret, color_ret = robot_obj.vision_pick(workspace_name)
+                except UnicodeDecodeError:
+                    raise RuntimeError(
+                        "vision_pick : erreur de décodage — mismatch pyniryo/firmware. "
+                        "Vérifie la version NiryOS sur http://10.10.10.10 et adapte pyniryo."
+                    )
 
                 if not obj_found:
                     robot_state["last_action"] = "Aucun objet détecté"
                 elif color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
                     robot_state["last_action"] = "Pick carré + Convoyeur — cercle rouge"
-                    robot_obj.move_joints(carre_pose)
+                    robot_obj.move_joints(*carre_pose)
                     robot_obj.pull_air_vacuum_pump()
-                    robot_obj.move_joints(base_pose)
-                    robot_obj.move_joints(lowbase_pose)
+                    robot_obj.move_joints(*base_pose)
+                    robot_obj.move_joints(*lowbase_pose)
                     robot_obj.push_air_vacuum_pump()
                     log_bdd("Pick carre")
-                    robot_state["conveyor_active"] = True
-                    robot_obj.run_conveyor(conveyor_id)
-                    time.sleep(2)
-                    robot_obj.stop_conveyor(conveyor_id)
-                    robot_state["conveyor_active"] = False
+                    if conveyor_id:
+                        robot_state["conveyor_active"] = True
+                        robot_obj.run_conveyor(conveyor_id)
+                        time.sleep(2)
+                        robot_obj.stop_conveyor(conveyor_id)
+                        robot_state["conveyor_active"] = False
                     robot_state["count"]["RED"] += 1
                 elif color_ret == ObjectColor.BLUE:
                     robot_state["last_action"] = "Éjection — objet bleu"
-                    robot_obj.move_joints(baseeject_pose)
-                    robot_obj.move_joints(eject_pose)
+                    robot_obj.move_joints(*baseeject_pose)
+                    robot_obj.move_joints(*eject_pose)
                     robot_state["count"]["BLUE"] += 1
                 elif color_ret == ObjectColor.GREEN:
                     robot_state["last_action"] = "Objet vert détecté"
@@ -255,19 +281,8 @@ def api_lancer():
 
 @app.route("/api/camera")
 def api_camera():
-    def generate():
-        while True:
-            if not robot_state["connected"] or robot_obj is None:
-                time.sleep(0.2)
-                continue
-            try:
-                frame = robot_obj.get_img_compressed()
-                yield (b"--frame\r\n"
-                       b"Content-Type: image/jpeg\r\n\r\n" + bytes(frame) + b"\r\n")
-                time.sleep(0.08)  # ~12 fps
-            except Exception:
-                time.sleep(0.2)
-    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
+    # Caméra désactivée temporairement
+    return Response(status=204)
 
 
 @app.route("/api/stop", methods=["POST"])

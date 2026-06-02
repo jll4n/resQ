@@ -20,13 +20,13 @@ DB_CONFIG = {
 }
 
 # ── Poses ─────────────────────────────────────────────────────────────────────
-base_pose       = JointsPosition( 0.19,  -0.012,  0.281, -1.491,  1.384, -2.77)
-carre_pose      = JointsPosition( 0.157,  0.19,   0.113,  2.941,  0.957, -3.122)
-lowbase_pose    = JointsPosition( 0.244,  0.005,  0.131, -2.61,   1.451, -2.893)
-rond_pose       = JointsPosition( 0.138, -0.184,  0.135, -1.901,  1.083,  2.961)
-eject_pose      = JointsPosition( 0.296,  0.004,  0.114, -2.7,    1.456,  3.111)
-baseeject_pose  = JointsPosition( 0.19,  -0.002,  0.115, -2.72,   1.3011,-3.094)
-base_pose_carre = JointsPosition( 0,      0,       0,     0,       0,     0)  # a ajouter
+base_pose       = [ 0.19,  -0.012,  0.281, -1.491,  1.384, -2.77]
+carre_pose      = [ 0.157,  0.19,   0.113,  2.941,  0.957, -3.122]
+lowbase_pose    = [ 0.244,  0.005,  0.131, -2.61,   1.451, -2.893]
+rond_pose       = [ 0.138, -0.184,  0.135, -1.901,  1.083,  2.961]
+eject_pose      = [ 0.296,  0.004,  0.114, -2.7,    1.456,  3.111]
+baseeject_pose  = [ 0.19,  -0.002,  0.115, -2.72,   1.3011,-3.094]
+base_pose_carre = [ 0,      0,       0,     0,       0,     0]  # a ajouter
 
 count_dict = {ObjectColor.BLUE: 0, ObjectColor.RED: 0, ObjectColor.GREEN: 0}
 
@@ -115,8 +115,13 @@ if __name__ == "__main__":
 
     # Connexion robot
     ip_robot = "169.254.200.200" if args.mode == "ethernet" else "10.10.10.10"
-    robot          = NiryoRobot(ip_robot)
+    robot = NiryoRobot(ip_robot)
+    try:
+        robot._TcpClient__client_socket.settimeout(120)
+    except AttributeError:
+        pass
     robot.calibrate_auto()
+    robot.set_learning_mode(False)
     workspace_name = "Workspace python"
     robot.update_tool()
     conveyor_id    = robot.set_conveyor()
