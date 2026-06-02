@@ -32,14 +32,29 @@ class JointsPosition:
         self._data = [float(j1), float(j2), float(j3),
                       float(j4), float(j5), float(j6)]
 
-    def __iter__(self):      return iter(self._data)
+    def __iter__(self):       return iter(self._data)
     def __getitem__(self, i): return self._data[i]
     def __len__(self):        return 6
     def __repr__(self):
         return f"JointsPosition({', '.join(f'{v:.3f}' for v in self._data)})"
 
 
-# ── Pose cartésienne simulée ──────────────────────────────────────────────────
+# ── PoseObject (coordonnées cartésiennes x,y,z,rx,ry,rz) ─────────────────────
+
+class PoseObject:
+    def __init__(self, x=0.0, y=0.0, z=0.0, rx=0.0, ry=0.0, rz=0.0):
+        self._data = [float(x), float(y), float(z),
+                      float(rx), float(ry), float(rz)]
+        self.x, self.y, self.z = self._data[0], self._data[1], self._data[2]
+
+    def __iter__(self):       return iter(self._data)
+    def __getitem__(self, i): return self._data[i]
+    def __len__(self):        return 6
+    def __repr__(self):
+        return f"PoseObject(x={self.x:.3f}, y={self.y:.3f}, z={self.z:.3f})"
+
+
+# ── Pose cartésienne simulée (retour get_pose) ────────────────────────────────
 
 class _MockPose:
     x = 0.15
@@ -79,9 +94,12 @@ class MockNiryoRobot:
     # Mouvements ────────────────────────────────────────────────────────────
 
     def move(self, position):
-        joints = list(position)
-        self._joints = joints
-        _log(f"move(JointsPosition({[round(j, 3) for j in joints]}))")
+        data = list(position)
+        if isinstance(position, PoseObject):
+            _log(f"move(PoseObject(x={data[0]:.3f}, y={data[1]:.3f}, z={data[2]:.3f}))")
+        else:
+            self._joints = data
+            _log(f"move(JointsPosition({[round(j, 3) for j in data]}))")
         time.sleep(0.35)
 
     def move_joints(self, *args):
@@ -211,5 +229,5 @@ def _make_frame(color=None, shape=None) -> bytes:
         )
 
 
-# ── Alias racine (compatibilité `from mock_niryo import NiryoRobot`) ──────────
+# ── Alias racine ──────────────────────────────────────────────────────────────
 NiryoRobot = MockNiryoRobot

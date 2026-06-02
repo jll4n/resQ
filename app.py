@@ -109,37 +109,37 @@ def api_mode():
 
 @app.route("/api/lancer", methods=["POST"])
 def api_lancer():
-    if robot_state["running"]:
-        return jsonify({"error": "Cycle déjà en cours"}), 409
-
     data = request.get_json(silent=True) or {}
     cycles = int(data.get("cycles", 1))
-    robot_state["cycle_target"] = max(0, cycles)  # 0 = infini
+
+    with robot_lock:
+        if robot_state["running"]:
+            return jsonify({"error": "Cycle déjà en cours"}), 409
+        robot_state["running"]        = True
+        robot_state["stop_requested"] = False
+        robot_state["cycles_done"]    = 0
+        robot_state["cycle_target"]   = max(0, cycles)
 
     def run_cycle():
         global robot_obj
         import os
         if os.environ.get("USE_MOCK"):
-            from mock_niryo import NiryoRobot, ObjectColor, ObjectShape, JointsPosition
+            from mock_niryo import NiryoRobot, ObjectColor, ObjectShape, PoseObject
         else:
-            from pyniryo import NiryoRobot, ObjectColor, ObjectShape, JointsPosition
+            from pyniryo import NiryoRobot, ObjectColor, ObjectShape, PoseObject
 
         ip = "169.254.200.200" if robot_state["mode"] == "ethernet" else "10.10.10.10"
-
-        with robot_lock:
-            robot_state["running"]        = True
-            robot_state["stop_requested"] = False
-            robot_state["cycles_done"]    = 0
 
         target = robot_state["cycle_target"]  # 0 = infini
 
         try:
             robot_obj = NiryoRobot(ip)
-            # Calibration peut durer 60 s+ — on étend le timeout socket
+            # pyniryo n'expose pas d'API publique pour le timeout d'opération ;
+            # accès à l'attribut privé pour éviter un timeout pendant calibrate_auto() (60 s+)
             try:
                 robot_obj._TcpClient__client_socket.settimeout(120)
-            except AttributeError:
-                pass
+            except Exception:
+                pass  # si l'attribut change dans une future version, on continue avec le timeout par défaut
             robot_obj.calibrate_auto()
             robot_obj.set_learning_mode(False)
             robot_state["connected"] = True
@@ -199,7 +199,7 @@ def api_lancer():
 
                 robot_state["last_action"] = "Mouvement base"
                 print(f"[ROBOT] move base_pose {base_pose}")
-                robot_obj.move(JointsPosition(*base_pose))
+                robot_obj.move(PoseObject(*base_pose))
                 print("[ROBOT] move base_pose OK")
                 update_joints()
                 time.sleep(1)
@@ -207,19 +207,19 @@ def api_lancer():
                 if robot_state["stop_requested"]: break
 
                 robot_state["last_action"] = "Pick rond"
-                robot_obj.move(JointsPosition(*rond_pose))
+                robot_obj.move(PoseObject(*rond_pose))
                 robot_obj.pull_air_vacuum_pump()
-                robot_obj.move(JointsPosition(*base_pose))
-                robot_obj.move(JointsPosition(*lowbase_pose))
+                robot_obj.move(PoseObject(*base_pose))
+                robot_obj.move(PoseObject(*lowbase_pose))
                 robot_obj.push_air_vacuum_pump()
-                robot_obj.move(JointsPosition(*base_pose))
+                robot_obj.move(PoseObject(*base_pose))
                 update_joints()
                 log_bdd("Pick rond")
 
                 if robot_state["stop_requested"]: break
 
                 robot_state["last_action"] = "Détection couleur"
-                robot_obj.move(JointsPosition(*base_pose))
+                robot_obj.move(PoseObject(*base_pose))
                 try:
                     obj_found, shape_ret, color_ret = robot_obj.vision_pick(workspace_name)
                 except UnicodeDecodeError:
@@ -232,10 +232,10 @@ def api_lancer():
                     robot_state["last_action"] = "Aucun objet détecté"
                 elif color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
                     robot_state["last_action"] = "Pick carré + Convoyeur — cercle rouge"
-                    robot_obj.move(JointsPosition(*carre_pose))
+                    robot_obj.move(PoseObject(*carre_pose))
                     robot_obj.pull_air_vacuum_pump()
-                    robot_obj.move(JointsPosition(*base_pose))
-                    robot_obj.move(JointsPosition(*lowbase_pose))
+                    robot_obj.move(PoseObject(*base_pose))
+                    robot_obj.move(PoseObject(*lowbase_pose))
                     robot_obj.push_air_vacuum_pump()
                     log_bdd("Pick carre")
                     if conveyor_id:
@@ -247,11 +247,13 @@ def api_lancer():
                     robot_state["count"]["RED"] += 1
                 elif color_ret == ObjectColor.BLUE:
                     robot_state["last_action"] = "Éjection — objet bleu"
-                    robot_obj.move(JointsPosition(*baseeject_pose))
-                    robot_obj.move(JointsPosition(*eject_pose))
+                    robot_obj.move(PoseObject(*baseeject_pose))
+                    robot_obj.move(PoseObject(*eject_pose))
+                    robot_obj.push_air_vacuum_pump()
                     robot_state["count"]["BLUE"] += 1
                 elif color_ret == ObjectColor.GREEN:
                     robot_state["last_action"] = "Objet vert détecté"
+                    robot_obj.push_air_vacuum_pump()
                     robot_state["count"]["GREEN"] += 1
 
                 update_joints()
@@ -287,11 +289,13 @@ def api_camera():
 
 @app.route("/api/stop", methods=["POST"])
 def api_stop():
-    robot_state["stop_requested"] = True
-    robot_state["last_action"]    = "⛔ Stop d'urgence"
-    if robot_obj:
+    with robot_lock:
+        robot_state["stop_requested"] = True
+        robot_state["last_action"]    = "⛔ Stop d'urgence"
+        obj = robot_obj
+    if obj:
         try:
-            robot_obj.stop_move()
+            obj.stop_move()
         except Exception:
             pass
     return jsonify({"statut": "stop envoyé"})

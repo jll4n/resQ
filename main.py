@@ -52,7 +52,7 @@ def executer_tache(nom_tache):
     steps = cursor.fetchall()
     for i, joints in enumerate(steps):
         try:
-            robot.move_joints(*joints)
+            robot.move(JointsPosition(*joints))
             log_mouvement(label=f"{nom_tache}_step{i}", statut="ok")
         except Exception as e:
             log_mouvement(label=f"{nom_tache}_step{i}", statut="erreur", erreur=str(e))
@@ -61,35 +61,36 @@ def executer_tache(nom_tache):
 
 # ── Séquences robot ───────────────────────────────────────────────────────────
 def pickcarre():
-    robot.move_pose(carre_pose)
+    robot.move(PoseObject(*carre_pose))
     robot.pull_air_vacuum_pump()
-    robot.move_pose(base_pose)
-    robot.move_pose(lowbase_pose)  # a ajouter
+    robot.move(PoseObject(*base_pose))
+    robot.move(PoseObject(*lowbase_pose))  # a ajouter
     robot.push_air_vacuum_pump()
     executer_tache("Pick carre")
 
 
 def pickrond():
-    robot.move_pose(rond_pose)
+    robot.move(PoseObject(*rond_pose))
     robot.pull_air_vacuum_pump()
-    robot.move_pose(base_pose)
-    robot.move_pose(lowbase_pose)
+    robot.move(PoseObject(*base_pose))
+    robot.move(PoseObject(*lowbase_pose))
     robot.push_air_vacuum_pump()
-    robot.move_pose(base_pose)
+    robot.move(PoseObject(*base_pose))
     executer_tache("Pick rond")
 
 
 def checkcolor():
-    robot.move_pose(base_pose)
+    robot.move(PoseObject(*base_pose))
     obj_found, shape_ret, color_ret = robot.vision_pick(workspace_name)
     if color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
         pickcarre()
-        robot.run_conveyor(conveyor_id)
-        time.sleep(2)
-        robot.stop_conveyor(conveyor_id)
+        if conveyor_id:
+            robot.run_conveyor(conveyor_id)
+            time.sleep(2)
+            robot.stop_conveyor(conveyor_id)
     elif color_ret == ObjectColor.BLUE:
-        robot.move_pose(baseeject_pose)
-        robot.move_pose(eject_pose)
+        robot.move(PoseObject(*baseeject_pose))
+        robot.move(PoseObject(*eject_pose))
     executer_tache("Check color")
     if color_ret:
         count_dict[color_ret] += 1
@@ -124,13 +125,17 @@ if __name__ == "__main__":
     robot.set_learning_mode(False)
     workspace_name = "Workspace python"
     robot.update_tool()
-    conveyor_id    = robot.set_conveyor()
+    try:
+        conveyor_id = robot.set_conveyor()
+    except Exception as e:
+        conveyor_id = None
+        print(f"[ROBOT] set_conveyor ignoré : {e}")
 
     target = args.cycles
     cycle  = 0
 
     try:
-        robot.move_pose(base_pose)
+        robot.move(PoseObject(*base_pose))
         time.sleep(1)
 
         while True:
@@ -152,7 +157,7 @@ if __name__ == "__main__":
             if target > 0 and cycle >= target:
                 break
 
-            robot.move_pose(base_pose)
+            robot.move(PoseObject(*base_pose))
             time.sleep(1)
 
     except KeyboardInterrupt:
@@ -163,7 +168,7 @@ if __name__ == "__main__":
     finally:
         print(f"\nFin — {cycle} cycle(s) effectué(s)")
         try:
-            robot.move_pose(base_pose)
+            robot.move(PoseObject(*base_pose))
         except Exception:
             pass
         robot.close_connection()
