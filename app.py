@@ -120,9 +120,9 @@ def api_lancer():
         global robot_obj
         import os
         if os.environ.get("USE_MOCK"):
-            from mock_niryo import NiryoRobot, ObjectColor, ObjectShape
+            from mock_niryo import NiryoRobot, ObjectColor, ObjectShape, JointsPosition
         else:
-            from pyniryo import NiryoRobot, ObjectColor, ObjectShape
+            from pyniryo import NiryoRobot, ObjectColor, ObjectShape, JointsPosition
 
         ip = "169.254.200.200" if robot_state["mode"] == "ethernet" else "10.10.10.10"
 
@@ -198,28 +198,28 @@ def api_lancer():
                     break
 
                 robot_state["last_action"] = "Mouvement base"
-                print(f"[ROBOT] move_joints base_pose {base_pose}")
-                robot_obj.move_joints(*base_pose)
-                print("[ROBOT] move_joints base_pose OK")
+                print(f"[ROBOT] move base_pose {base_pose}")
+                robot_obj.move(JointsPosition(*base_pose))
+                print("[ROBOT] move base_pose OK")
                 update_joints()
                 time.sleep(1)
 
                 if robot_state["stop_requested"]: break
 
                 robot_state["last_action"] = "Pick rond"
-                robot_obj.move_joints(*rond_pose)
+                robot_obj.move(JointsPosition(*rond_pose))
                 robot_obj.pull_air_vacuum_pump()
-                robot_obj.move_joints(*base_pose)
-                robot_obj.move_joints(*lowbase_pose)
+                robot_obj.move(JointsPosition(*base_pose))
+                robot_obj.move(JointsPosition(*lowbase_pose))
                 robot_obj.push_air_vacuum_pump()
-                robot_obj.move_joints(*base_pose)
+                robot_obj.move(JointsPosition(*base_pose))
                 update_joints()
                 log_bdd("Pick rond")
 
                 if robot_state["stop_requested"]: break
 
                 robot_state["last_action"] = "Détection couleur"
-                robot_obj.move_joints(*base_pose)
+                robot_obj.move(JointsPosition(*base_pose))
                 try:
                     obj_found, shape_ret, color_ret = robot_obj.vision_pick(workspace_name)
                 except UnicodeDecodeError:
@@ -232,10 +232,10 @@ def api_lancer():
                     robot_state["last_action"] = "Aucun objet détecté"
                 elif color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
                     robot_state["last_action"] = "Pick carré + Convoyeur — cercle rouge"
-                    robot_obj.move_joints(*carre_pose)
+                    robot_obj.move(JointsPosition(*carre_pose))
                     robot_obj.pull_air_vacuum_pump()
-                    robot_obj.move_joints(*base_pose)
-                    robot_obj.move_joints(*lowbase_pose)
+                    robot_obj.move(JointsPosition(*base_pose))
+                    robot_obj.move(JointsPosition(*lowbase_pose))
                     robot_obj.push_air_vacuum_pump()
                     log_bdd("Pick carre")
                     if conveyor_id:
@@ -247,8 +247,8 @@ def api_lancer():
                     robot_state["count"]["RED"] += 1
                 elif color_ret == ObjectColor.BLUE:
                     robot_state["last_action"] = "Éjection — objet bleu"
-                    robot_obj.move_joints(*baseeject_pose)
-                    robot_obj.move_joints(*eject_pose)
+                    robot_obj.move(JointsPosition(*baseeject_pose))
+                    robot_obj.move(JointsPosition(*eject_pose))
                     robot_state["count"]["BLUE"] += 1
                 elif color_ret == ObjectColor.GREEN:
                     robot_state["last_action"] = "Objet vert détecté"

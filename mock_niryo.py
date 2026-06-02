@@ -78,6 +78,12 @@ class MockNiryoRobot:
 
     # Mouvements ────────────────────────────────────────────────────────────
 
+    def move(self, position):
+        joints = list(position)
+        self._joints = joints
+        _log(f"move(JointsPosition({[round(j, 3) for j in joints]}))")
+        time.sleep(0.35)
+
     def move_joints(self, *args):
         joints = list(args[0]) if len(args) == 1 else list(args)
         self._joints = joints
