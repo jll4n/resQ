@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 import mysql.connector
 import datetime
 import threading
@@ -23,6 +23,8 @@ robot_state = {
     "mode":            "wifi",   # "wifi" ou "ethernet"
     "joints": {"j1": 0, "j2": 0, "j3": 0, "j4": 0, "j5": 0, "j6": 0},
     "count": {"BLUE": 0, "RED": 0, "GREEN": 0},
+    "cycle_target":    1,
+    "cycles_done":     0,
 }
 
 robot_lock = threading.Lock()
@@ -106,15 +108,26 @@ def api_lancer():
     if robot_state["running"]:
         return jsonify({"error": "Cycle déjà en cours"}), 409
 
+    data = request.get_json(silent=True) or {}
+    cycles = int(data.get("cycles", 1))
+    robot_state["cycle_target"] = max(0, cycles)  # 0 = infini
+
     def run_cycle():
         global robot_obj
-        from pyniryo import NiryoRobot, JointsPosition, ObjectColor, ObjectShape
+        import os
+        if os.environ.get("USE_MOCK"):
+            from mock_niryo import NiryoRobot, JointsPosition, ObjectColor, ObjectShape
+        else:
+            from pyniryo import NiryoRobot, JointsPosition, ObjectColor, ObjectShape
 
         ip = "169.254.200.200" if robot_state["mode"] == "ethernet" else "10.10.10.10"
 
         with robot_lock:
             robot_state["running"]        = True
             robot_state["stop_requested"] = False
+            robot_state["cycles_done"]    = 0
+
+        target = robot_state["cycle_target"]  # 0 = infini
 
         try:
             robot_obj = NiryoRobot(ip)
@@ -141,7 +154,7 @@ def api_lancer():
                     "j5": round(j[4], 3), "j6": round(j[5], 3),
                 }
 
-            def log_bdd(label, statut="ok", erreur=None):
+            def log_bdd(label, statut="ok", erreur=None, color=None):
                 try:
                     db     = get_db()
                     cur    = db.cursor()
@@ -149,75 +162,78 @@ def api_lancer():
                     pose   = robot_obj.get_pose()
                     cur.execute("""
                         INSERT INTO robot_logs
-                            (timestamp, label, statut, j1, j2, j3, j4, j5, j6, x, y, z, erreur)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            (timestamp, label, statut, j1, j2, j3, j4, j5, j6, x, y, z, erreur, color)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (datetime.datetime.now(), label, statut,
-                          *joints, pose.x, pose.y, pose.z, erreur))
+                          *joints, pose.x, pose.y, pose.z, erreur, color))
                     db.commit()
                     cur.close()
                     db.close()
                 except Exception:
                     pass
 
-            if robot_state["stop_requested"]: return
+            while not robot_state["stop_requested"]:
+                if target > 0 and robot_state["cycles_done"] >= target:
+                    break
 
-            robot_state["last_action"] = "Mouvement base"
-            robot_obj.move_joints(base_pose)
-            update_joints()
-            time.sleep(1)
+                robot_state["last_action"] = "Mouvement base"
+                robot_obj.move_joints(base_pose)
+                update_joints()
+                time.sleep(1)
 
-            if robot_state["stop_requested"]: return
+                if robot_state["stop_requested"]: break
 
-            robot_state["last_action"] = "Pick carré"
-            robot_obj.move_joints(carre_pose)
-            robot_obj.pull_air_vacuum_pump()
-            robot_obj.move_joints(base_pose)
-            robot_obj.move_joints(lowbase_pose)
-            robot_obj.push_air_vacuum_pump()
-            update_joints()
-            log_bdd("Pick carre")
-            time.sleep(1)
+                robot_state["last_action"] = "Pick rond"
+                robot_obj.move_joints(rond_pose)
+                robot_obj.pull_air_vacuum_pump()
+                robot_obj.move_joints(base_pose)
+                robot_obj.move_joints(lowbase_pose)
+                robot_obj.push_air_vacuum_pump()
+                robot_obj.move_joints(base_pose)
+                update_joints()
+                log_bdd("Pick rond")
 
-            if robot_state["stop_requested"]: return
+                if robot_state["stop_requested"]: break
 
-            robot_state["last_action"] = "Pick rond"
-            robot_obj.move_joints(rond_pose)
-            robot_obj.pull_air_vacuum_pump()
-            robot_obj.move_joints(base_pose)
-            robot_obj.move_joints(lowbase_pose)
-            robot_obj.push_air_vacuum_pump()
-            robot_obj.move_joints(base_pose)
-            update_joints()
-            log_bdd("Pick rond")
+                robot_state["last_action"] = "Détection couleur"
+                robot_obj.move_joints(base_pose)
+                obj_found, shape_ret, color_ret = robot_obj.vision_pick(workspace_name)
 
-            if robot_state["stop_requested"]: return
+                if not obj_found:
+                    robot_state["last_action"] = "Aucun objet détecté"
+                elif color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
+                    robot_state["last_action"] = "Pick carré + Convoyeur — cercle rouge"
+                    robot_obj.move_joints(carre_pose)
+                    robot_obj.pull_air_vacuum_pump()
+                    robot_obj.move_joints(base_pose)
+                    robot_obj.move_joints(lowbase_pose)
+                    robot_obj.push_air_vacuum_pump()
+                    log_bdd("Pick carre")
+                    robot_state["conveyor_active"] = True
+                    robot_obj.run_conveyor(conveyor_id)
+                    time.sleep(2)
+                    robot_obj.stop_conveyor(conveyor_id)
+                    robot_state["conveyor_active"] = False
+                    robot_state["count"]["RED"] += 1
+                elif color_ret == ObjectColor.BLUE:
+                    robot_state["last_action"] = "Éjection — objet bleu"
+                    robot_obj.move_joints(baseeject_pose)
+                    robot_obj.move_joints(eject_pose)
+                    robot_state["count"]["BLUE"] += 1
+                elif color_ret == ObjectColor.GREEN:
+                    robot_state["last_action"] = "Objet vert détecté"
+                    robot_state["count"]["GREEN"] += 1
 
-            robot_state["last_action"] = "Détection couleur"
-            robot_obj.move_joints(base_pose)
-            obj_found, shape_ret, color_ret = robot_obj.vision_pick(workspace_name)
+                update_joints()
+                color_str = color_ret.name if obj_found and color_ret else None
+                log_bdd("Check color", color=color_str)
 
-            if not obj_found:
-                robot_state["last_action"] = "Aucun objet détecté"
-            elif color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
-                robot_state["last_action"] = "Convoyeur — cercle rouge"
-                robot_state["conveyor_active"] = True
-                robot_obj.run_conveyor(conveyor_id)
-                time.sleep(2)
-                robot_obj.stop_conveyor(conveyor_id)
-                robot_state["conveyor_active"] = False
-                robot_state["count"]["RED"] += 1
-            elif color_ret == ObjectColor.BLUE:
-                robot_state["last_action"] = "Éjection — objet bleu"
-                robot_obj.move_joints(baseeject_pose)
-                robot_obj.move_joints(eject_pose)
-                robot_state["count"]["BLUE"] += 1
-            elif color_ret == ObjectColor.GREEN:
-                robot_state["last_action"] = "Objet vert détecté"
-                robot_state["count"]["GREEN"] += 1
+                robot_state["cycles_done"] += 1
+                suffix = f"{robot_state['cycles_done']}/{target}" if target > 0 else str(robot_state["cycles_done"])
+                robot_state["last_action"] = f"Cycle {suffix} terminé ✓"
 
-            update_joints()
-            log_bdd("Check color")
-            robot_state["last_action"] = "Cycle terminé ✓"
+            if not robot_state["stop_requested"]:
+                robot_state["last_action"] = f"Terminé — {robot_state['cycles_done']} cycle(s)"
 
         except Exception as e:
             robot_state["last_action"] = f"Erreur : {e}"
@@ -232,6 +248,23 @@ def api_lancer():
 
     threading.Thread(target=run_cycle, daemon=True).start()
     return jsonify({"statut": "cycle lancé"})
+
+@app.route("/api/camera")
+def api_camera():
+    def generate():
+        while True:
+            if not robot_state["connected"] or robot_obj is None:
+                time.sleep(0.2)
+                continue
+            try:
+                frame = robot_obj.get_img_compressed()
+                yield (b"--frame\r\n"
+                       b"Content-Type: image/jpeg\r\n\r\n" + bytes(frame) + b"\r\n")
+                time.sleep(0.08)  # ~12 fps
+            except Exception:
+                time.sleep(0.2)
+    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
 
 @app.route("/api/stop", methods=["POST"])
 def api_stop():

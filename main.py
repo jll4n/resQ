@@ -1,5 +1,9 @@
 # !/usr/bin/env python3
-from pyniryo import *
+import os
+if os.environ.get("USE_MOCK"):
+    from mock_niryo import *
+else:
+    from pyniryo import *
 import time
 import mysql.connector
 import datetime
@@ -33,6 +37,7 @@ lowbase_pose = JointsPosition(0.244, 0.005, 0.131, -2.61, 1.451, -2.893)
 rond_pose = JointsPosition(0.138, -0.184, 0.135, -1.901, 1.083, 2.961)
 eject_pose = JointsPosition(0.296, 0.004, 0.114, -2.7, 1.456, 3.111)
 baseeject_pose = JointsPosition(0.19, -0.002, 0.115, -2.72, 1.3011, -3.094)
+base_pose_carre = JointsPosition(0, 0, 0, 0, 0, 0) #a ajouter
 
 count_dict = {
     ObjectColor.BLUE: 0,
@@ -75,7 +80,7 @@ def pickcarre():
     robot.move_pose(carre_pose)
     robot.pull_air_vacuum_pump()
     robot.move_pose(base_pose)
-    robot.move_pose(lowbase_pose)
+    robot.move_pose(lowbase_pose) #a ajouter
     robot.push_air_vacuum_pump()
     executer_tache("Pick carre")
 
@@ -90,10 +95,12 @@ def pickrond():
     executer_tache("Pick rond")
 
 
+#modif ca
 def checkcolor():
     robot.move_pose(base_pose)
     obj_found, shape_ret, color_ret = robot.vision_pick(workspace_name)
     if color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
+        pickcarre()
         robot.run_conveyor(conveyor_id)
         time.sleep(2)
         robot.stop_conveyor(conveyor_id)
@@ -105,10 +112,10 @@ def checkcolor():
 
 robot.move_pose(base_pose)
 time.sleep(1)
-pickcarre()
-time.sleep(1)
-robot.move_pose(base_pose)
 pickrond()
 checkcolor()
+time.sleep(1)
+robot.move_pose(base_pose)
+
 
 robot.close_connection()

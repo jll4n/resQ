@@ -10,6 +10,13 @@
 </head>
 <body>
 
+  <!-- ── TOAST ERREUR ── -->
+  <div class="alert-toast" id="alertToast">
+    <span class="alert-icon">⚠</span>
+    <span id="alertMsg">Erreur robot</span>
+    <button onclick="dismissAlert()" class="alert-close">✕</button>
+  </div>
+
   <!-- ── HEADER ── -->
   <header>
     <div class="header-left">
@@ -41,6 +48,14 @@
             <button class="toggle-btn" id="btnEthernet" onclick="setMode('ethernet')">ETHERNET</button>
           </div>
           <div class="mode-ip" id="modeIp">IP : 10.10.10.10</div>
+        </div>
+
+        <div class="cycle-config">
+          <label class="mode-label">NOMBRE DE CYCLES</label>
+          <div class="cycle-input-group">
+            <input type="number" id="cycleCount" value="1" min="0" class="cycle-input" />
+            <span class="cycle-hint">0 = infini ∞</span>
+          </div>
         </div>
 
         <div class="ctrl-buttons">
@@ -145,8 +160,26 @@
                 <span class="sr-label">CONVOYEUR</span>
                 <span class="sr-badge" id="badgeConveyor">ARRÊTÉ</span>
               </div>
+              <div class="status-row">
+                <span class="sr-label">CYCLES</span>
+                <span class="sr-badge off" id="badgeCycles">—</span>
+              </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Flux caméra -->
+      <section class="card" id="cameraPanel">
+        <h2 class="card-title">FLUX CAMÉRA</h2>
+        <div class="camera-wrap">
+          <div class="camera-off" id="cameraOff">
+            <div class="cam-off-text">
+              CAMÉRA INACTIVE
+              <span>Disponible pendant le cycle</span>
+            </div>
+          </div>
+          <img id="cameraFeed" class="camera-feed" alt="Flux caméra robot" />
         </div>
       </section>
 
@@ -212,9 +245,12 @@
 
     // ── Lancer / Stop ────────────────────────────────────────────────────────
     function lancerCycle() {
-      fetch("/api/lancer", { method: "POST" })
-        .then(r => r.json())
-        .then(d => console.log(d));
+      const cycles = parseInt(document.getElementById("cycleCount").value) || 1;
+      fetch("/api/lancer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cycles })
+      }).then(r => r.json()).then(d => console.log(d));
     }
 
     function stopUrgence() {
@@ -223,11 +259,49 @@
       fetch("/api/stop", { method: "POST" });
     }
 
+    // ── Alertes erreur ───────────────────────────────────────────────────────
+    let prevLastAction = "";
+
+    function showAlert(msg) {
+      document.getElementById("alertMsg").textContent = msg;
+      document.getElementById("alertToast").classList.add("visible");
+      playErrorBeep();
+      setTimeout(dismissAlert, 8000);
+    }
+
+    function dismissAlert() {
+      document.getElementById("alertToast").classList.remove("visible");
+    }
+
+    function playErrorBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        [0, 0.28, 0.56].forEach(t => {
+          const osc  = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 520;
+          osc.type = "square";
+          gain.gain.setValueAtTime(0.12, ctx.currentTime + t);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.22);
+          osc.start(ctx.currentTime + t);
+          osc.stop(ctx.currentTime + t + 0.22);
+        });
+      } catch(e) {}
+    }
+
     // ── Mise à jour état temps réel ──────────────────────────────────────────
     function updateState() {
       fetch("/api/state")
         .then(r => r.json())
         .then(s => {
+          // Détection erreur
+          if (s.last_action !== prevLastAction && s.last_action.startsWith("Erreur")) {
+            showAlert(s.last_action);
+          }
+          prevLastAction = s.last_action;
+
           // Status dot
           const dot = document.getElementById("statusDot");
           const lbl = document.getElementById("statusLabel");
@@ -250,6 +324,16 @@
           setBadge("badgeConveyor",s.conveyor_active ? "ACTIF" : "ARRÊTÉ",
                                    s.conveyor_active ? "ok" : "off");
 
+          // Badge cycles
+          if (s.running || s.cycles_done > 0) {
+            const target = s.cycle_target;
+            const done   = s.cycles_done;
+            const label  = target > 0 ? `${done} / ${target}` : `${done} (∞)`;
+            setBadge("badgeCycles", label, s.running ? "ok" : "off");
+          } else {
+            setBadge("badgeCycles", "—", "off");
+          }
+
           // Dernière action
           document.getElementById("lastAction").textContent = s.last_action || "—";
 
@@ -270,6 +354,19 @@
 
           // Bouton lancer
           document.getElementById("btnLaunch").disabled = s.running;
+
+          // Caméra — on démarre le flux à la connexion, on le coupe à la déconnexion
+          const camFeed = document.getElementById("cameraFeed");
+          const camOff  = document.getElementById("cameraOff");
+          if (s.connected && camFeed.style.display !== "block") {
+            camFeed.src = "/api/camera?" + Date.now();
+            camFeed.style.display = "block";
+            camOff.style.display  = "none";
+          } else if (!s.connected && camFeed.style.display === "block") {
+            camFeed.src = "";
+            camFeed.style.display = "none";
+            camOff.style.display  = "flex";
+          }
         })
         .catch(() => {});
     }
