@@ -510,6 +510,19 @@ tbody td {
   text-overflow: ellipsis;
 }
 
+/* ── Badge couleur vision ────────────────────────────────────────────────────── */
+.badge-color {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-weight: 700;
+}
+.badge-color.red   { background: rgba(255,23,68,.15);  color: var(--red);   border: 1px solid rgba(255,23,68,.3); }
+.badge-color.blue  { background: rgba(41,121,255,.15); color: #6ea8ff;      border: 1px solid rgba(41,121,255,.3); }
+.badge-color.green { background: rgba(0,230,118,.15);  color: var(--green); border: 1px solid rgba(0,230,118,.3); }
+
 /* ── Caméra ─────────────────────────────────────────────────────────────────── */
 .camera-wrap {
   position: relative;

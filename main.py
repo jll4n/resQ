@@ -20,12 +20,12 @@ DB_CONFIG = {
 }
 
 # ── Poses ─────────────────────────────────────────────────────────────────────
-base_pose       = [ 0.19,  -0.012,  0.281, -1.491,  1.384, -2.77]
-carre_pose      = [ 0.157,  0.19,   0.113,  2.941,  0.957, -3.122]
-lowbase_pose    = [ 0.244,  0.005,  0.131, -2.61,   1.451, -2.893]
-rond_pose       = [ 0.138, -0.184,  0.135, -1.901,  1.083,  2.961]
-eject_pose      = [ 0.296,  0.004,  0.114, -2.7,    1.456,  3.111]
-baseeject_pose  = [ 0.19,  -0.002,  0.115, -2.72,   1.3011,-3.094]
+base_pose       = [ 0.1886, -0.007, 0.3259, 3.08, 1.2298, -3.0854]
+carre_pose      = [ 0.1577, 0.1956, 0.1204, 2.6986, 1.1696, -2.7449]
+lowbase_pose    = [ 0.2271, -0.0209, 0.1155, -3.0273, 1.5398, -2.9527]
+rond_pose       = [ 0.129, -0.1637, 0.1258, -2.7663, 1.1528, -3.0698]
+eject_pose      = [ 0.2966, -0.0268, 0.112, -1.6157, 1.533, -1.4918]
+baseeject_pose  = [ 0.1667, -0.014, 0.1024, -3.0793, 1.4499, -2.8848]
 base_pose_carre = [ 0,      0,       0,     0,       0,     0]  # a ajouter
 
 count_dict = {ObjectColor.BLUE: 0, ObjectColor.RED: 0, ObjectColor.GREEN: 0}
@@ -52,7 +52,7 @@ def executer_tache(nom_tache):
     steps = cursor.fetchall()
     for i, joints in enumerate(steps):
         try:
-            robot.move(JointsPosition(*joints))
+            robot.move_pose(JointsPosition(*joints))
             log_mouvement(label=f"{nom_tache}_step{i}", statut="ok")
         except Exception as e:
             log_mouvement(label=f"{nom_tache}_step{i}", statut="erreur", erreur=str(e))
@@ -61,37 +61,48 @@ def executer_tache(nom_tache):
 
 # ── Séquences robot ───────────────────────────────────────────────────────────
 def pickcarre():
-    robot.move(PoseObject(*carre_pose))
+    robot.move_pose(JointsPosition(*carre_pose))
     robot.pull_air_vacuum_pump()
-    robot.move(PoseObject(*base_pose))
-    robot.move(PoseObject(*lowbase_pose))  # a ajouter
+    robot.move_pose(JointsPosition(*base_pose))
     robot.push_air_vacuum_pump()
     executer_tache("Pick carre")
 
 
 def pickrond():
-    robot.move(PoseObject(*rond_pose))
+    robot.move_pose(JointsPosition(*rond_pose))
     robot.pull_air_vacuum_pump()
-    robot.move(PoseObject(*base_pose))
-    robot.move(PoseObject(*lowbase_pose))
+    robot.move_pose(JointsPosition(*base_pose))
+    robot.move_pose(JointsPosition(*lowbase_pose))
     robot.push_air_vacuum_pump()
-    robot.move(PoseObject(*base_pose))
+    robot.move_pose(JointsPosition(*base_pose))
     executer_tache("Pick rond")
 
 
 def checkcolor():
-    robot.move(PoseObject(*base_pose))
-    obj_found, shape_ret, color_ret = robot.vision_pick(workspace_name)
-    if color_ret == ObjectColor.RED and shape_ret == ObjectShape.CIRCLE:
-        pickcarre()
+    robot.move_pose(JointsPosition(*base_pose))
+    _, shape_ret, color_ret = robot.vision_pick(workspace_name)
+    print(f"[ROBOT] vision_pick → shape={shape_ret} color={color_ret}")
+    if color_ret == ObjectColor.RED:
+        # Rouge → convoyeur puis relâche
         if conveyor_id:
             robot.run_conveyor(conveyor_id)
             time.sleep(2)
             robot.stop_conveyor(conveyor_id)
+        robot.push_air_vacuum_pump()
     elif color_ret == ObjectColor.BLUE:
-        robot.move(PoseObject(*baseeject_pose))
-        robot.move(PoseObject(*eject_pose))
-    executer_tache("Check color")
+        # Bleu → éjection puis relâche
+        robot.move_pose(JointsPosition(*baseeject_pose))
+        robot.move_pose(JointsPosition(*eject_pose))
+        robot.push_air_vacuum_pump()
+    elif color_ret == ObjectColor.GREEN:
+        # Vert → relâche en base
+        robot.move_pose(JointsPosition(*base_pose))
+        robot.push_air_vacuum_pump()
+    else:
+        # Couleur non reconnue — relâche en base
+        print(f"[ROBOT] couleur non gérée : {color_ret}, relâche en base")
+        robot.move_pose(JointsPosition(*base_pose))
+        robot.push_air_vacuum_pump()
     if color_ret:
         count_dict[color_ret] += 1
 
@@ -123,7 +134,7 @@ if __name__ == "__main__":
         pass
     robot.calibrate_auto()
     robot.set_learning_mode(False)
-    workspace_name = "Workspace python"
+    workspace_name = "OM"
     robot.update_tool()
     try:
         conveyor_id = robot.set_conveyor()
@@ -135,7 +146,7 @@ if __name__ == "__main__":
     cycle  = 0
 
     try:
-        robot.move(PoseObject(*base_pose))
+        robot.move_pose(JointsPosition(*base_pose))
         time.sleep(1)
 
         while True:
@@ -157,7 +168,7 @@ if __name__ == "__main__":
             if target > 0 and cycle >= target:
                 break
 
-            robot.move(PoseObject(*base_pose))
+            robot.move_pose(JointsPosition(*base_pose))
             time.sleep(1)
 
     except KeyboardInterrupt:
@@ -168,7 +179,7 @@ if __name__ == "__main__":
     finally:
         print(f"\nFin — {cycle} cycle(s) effectué(s)")
         try:
-            robot.move(PoseObject(*base_pose))
+            robot.move_pose(JointsPosition(*base_pose))
         except Exception:
             pass
         robot.close_connection()

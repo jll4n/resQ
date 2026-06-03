@@ -183,6 +183,26 @@
         </div>
       </section>
 
+      <!-- Historique vision -->
+      <section class="card" id="visionPanel">
+        <h2 class="card-title">DÉTECTIONS VISION</h2>
+        <div class="table-wrap" style="max-height:200px;">
+          <table id="visionTable">
+            <thead>
+              <tr>
+                <th>HEURE</th>
+                <th>TROUVÉ</th>
+                <th>FORME</th>
+                <th>COULEUR</th>
+              </tr>
+            </thead>
+            <tbody id="visionTbody">
+              <tr><td colspan="4" class="empty-row">En attente de détection</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- Historique des logs -->
       <section class="card" id="logsPanel">
         <div class="logs-header">
@@ -355,7 +375,18 @@
           // Bouton lancer
           document.getElementById("btnLaunch").disabled = s.running;
 
-          // Caméra désactivée temporairement
+          // Caméra — démarre le flux à la connexion, coupe à la déconnexion
+          const camFeed = document.getElementById("cameraFeed");
+          const camOff  = document.getElementById("cameraOff");
+          if (s.connected && camFeed.style.display !== "block") {
+            camFeed.src = "/api/camera?" + Date.now();
+            camFeed.style.display = "block";
+            camOff.style.display  = "none";
+          } else if (!s.connected && camFeed.style.display === "block") {
+            camFeed.src = "";
+            camFeed.style.display = "none";
+            camOff.style.display  = "flex";
+          }
         })
         .catch(() => {});
     }
@@ -406,11 +437,31 @@
       return v !== null && v !== undefined ? parseFloat(v).toFixed(3) : "—";
     }
 
+    // ── Vision logs ──────────────────────────────────────────────────────────
+    function loadVision() {
+      fetch("/api/vision")
+        .then(r => r.json())
+        .then(rows => {
+          const tbody = document.getElementById("visionTbody");
+          if (!rows.length) return;
+          const colorClass = { RED: "red", BLUE: "blue", GREEN: "green" };
+          tbody.innerHTML = rows.map(r => `
+            <tr>
+              <td class="mono">${r.ts}</td>
+              <td><span class="sr-badge ${r.obj_found ? 'ok' : 'off'}">${r.obj_found ? 'OUI' : 'NON'}</span></td>
+              <td>${r.shape}</td>
+              <td><span class="badge-color ${colorClass[r.color] || ''}">${r.color}</span></td>
+            </tr>`).join("");
+        }).catch(() => {});
+    }
+
     // ── Polling ──────────────────────────────────────────────────────────────
     setInterval(updateState, 1000);
     setInterval(loadLogs,    3000);
+    setInterval(loadVision,  1000);
     updateState();
     loadLogs();
+    loadVision();
   </script>
 </body>
 </html>
